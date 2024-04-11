@@ -16,6 +16,28 @@ from pdfminer.converter import TextConverter
 from io import StringIO
 import json
 
+"""
+This code snippet is a Python script that extracts questions and answers from a PDF file and processes them into JSON format. 
+
+The script performs the following steps:
+1. Imports necessary libraries.
+2. Defines constants for page ranges and directories.
+3. Initializes logging configuration.
+4. Defines functions for extracting questions to JSON, reading and processing files, cleaning answers file, creating and clearing directories, extracting text from PDF pages, cleaning HTML tags and page numbers, extracting choices from question text, cleaning redundant or less suitable choice texts, separating question and choices, parsing questions with choices, parsing question items, parsing questions and answers, checking if a choice sequence is valid, parsing choices, saving data to JSON, and the main function.
+5. Configures logging and creates/clears output directories.
+6. Extracts text from relevant pages of the PDF file.
+7. Saves extracted text to files.
+8. Cleans the answers text file and saves it to a new file.
+9. Extracts answers from the cleaned text file and serializes them to JSON.
+10. Saves the serialized JSON to a file.
+11. Parses questions and prepares the data structure.
+12. Saves questions with matched answers to a JSON file.
+
+The main function is called to execute the script.
+
+Note: The code snippet assumes the existence of certain functions and variables that are not defined in the provided code.
+"""
+
 # Define constants to specify the range of pages for questions and answers
 LAST_QUESTION_PAGE = 79
 FIRST_ANSWER_PAGE = 80
