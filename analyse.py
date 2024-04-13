@@ -68,8 +68,18 @@ def analyze_text_page(page_path):
     except Exception as error:
         logging.error(f"Error during page analysis: {error}")
 
+# Function to extract choices
+def extract_choices(choices_text):
+    logging.info(f"Analyzing choices: {choices_text}")
+    # return object json
+    # id:number
+    # name: string ("A","B","C","D","E","F")
+    # label: string
+    # Regex to extract each choice from the given text
+    choice_pattern = re.compile(r'\(?([A-E])\)\s*(.*?)\s*(?=\([A-E]\)|$)', re.DOTALL)
+    return [{"label": label.strip(), "text": text.strip()} for label, text in choice_pattern.findall(choices_text)]
+
 def create_question_info(question_num, question_text):
-    # logging.info(f"Analyzing number: {question_num}")
     logging.info(f"Analyzing text: {question_text}")
     # Updated the regex to capture variations of "There are X correct answers"
     answer_count_regex = re.compile(
@@ -87,11 +97,7 @@ def create_question_info(question_num, question_text):
         "type": "radio"  # default type
     }  
      # Function to extract choices
-    def extract_choices(choices_text):
-        # Regex to extract each choice from the given text
-        choice_pattern = re.compile(r'\(?([A-E])\)\s*(.*?)\s*(?=\([A-E]\)|$)', re.DOTALL)
-
-        return [{"label": label.strip(), "text": text.strip()} for label, text in choice_pattern.findall(choices_text)]
+  
 
     if match_count:
         correct_answers_count = int(match_count.group(1))
