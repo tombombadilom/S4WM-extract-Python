@@ -112,8 +112,10 @@ def create_question_info(question_num, question_text):
         question_info["choices"].extend(extract_choices(question_choices))
 
     else:
-        alternate_pattern = re.compile(r'Please\s*choose\s*the\s*correct\s*answer', re.IGNORECASE)
+        alternate_pattern = re.compile(r'Please\s*choose\s*the\s*correct\s*answer\.?', re.IGNORECASE)
+        third_pattern = re.compile(r'Choose\s*the\s*correct\s*answer\(s\)[:.]?', re.IGNORECASE)
         match_alternate = alternate_pattern.search(question_text)
+        match_third = third_pattern.search(question_text)
 
         if match_alternate:
            
@@ -126,6 +128,16 @@ def create_question_info(question_num, question_text):
             question_info["choices"].extend(extract_choices(question_choices))
             question_info["question_number"] = 1
             question_info["type"] = "radio"
+        elif match_third:
+            logging.info(f"Using third pattern for question #{question_num}")
+            separator_position = match_third.end()
+            question_label = question_text[:separator_position].strip('. ')
+            question_choices = question_text[separator_position:].strip()
+
+            question_info["label"] = question_label
+            question_info["choices"].extend(extract_choices(question_choices))
+            question_info["question_number"] = 99  # Assuming single answer unless specified otherwise
+            question_info["type"] = "checkbox"
         else:
             logging.warning(f"No correct answer or alternate pattern for question #{question_num}")
             question_info["valid"] = False
