@@ -23,10 +23,10 @@ TITLE_PATTERN = "C_S4EWM_2020 - Extended Warehouse Management with SAP S4HANA"
 
 # Directories
 output_directory = './output'
-pages_directory = os.path.join(output_directory, 'pages')
-json_directory = './json'
+pages_dir = os.path.join(output_directory, 'pages')
+json_dir = './json'
 log_directory = './log'
-JSON_FILE='questionnaire.json'
+json_filename='questionnaire.json'
 
 # Log file path
 log_file_path = os.path.join(log_directory, 'process.log')
@@ -34,115 +34,137 @@ log_file_path = os.path.join(log_directory, 'process.log')
 # 3. Initializes logging configuration.
 logging.basicConfig(filename=log_file_path, filemode='w', level=logging.INFO, format='%(levelname)s:%(message)s')
 
-def read_file(file_path):
-    with open(file_path, 'r', encoding='utf-8') as file:
+def open_file(path):
+    with open(path, 'r', encoding='utf-8') as file:
         return file.read()
 
-# Function to extract questions from text using a regex pattern
-def read_file(file_path):
-    with open(file_path, 'r', encoding='utf-8') as file:
-        return file.read()
+def find_questions(page_text):
+    logging.debug("Searching for questions in the text")
+    try:
+        question_regex = re.compile(r'(?<!\d)(\d{1,3})\.\s*(.*?)(?=(?<!\d)\d{1,3}\.\s*|\Z)', re.DOTALL)
+        found_questions = question_regex.findall(page_text)
+        if not found_questions:
+            logging.debug("No questions detected using regex.")
+        return found_questions
+    except Exception as error:
+        logging.error(f"Error during question search: {error}")
+        return []
 
-# Function to extract questions from text using a regex pattern
-def extract_questions(text):
-    # Modify the pattern to match question numbers followed by text without using look-behind
-    question_pattern = re.compile(r'(\d{1,3})\.\s*([^\d]+?)(?=(?:\s*\d{1,3}\.|$))', re.DOTALL)
-    questions = question_pattern.findall(text)
-    return questions
+def analyze_text_page(page_path):
+    logging.info(f"Analyzing text page: {page_path}")
+    try:
+        content = open_file(page_path)
+        if not content.strip():
+            logging.warning(f"Page {page_path} is empty.")
+            return []
+        
+        found_questions = find_questions(content)
+        if not found_questions:
+            logging.warning(f"No questions on page {page_path}.")
+            return []
 
-# Function to analyze each page
-def analyze_page(file_path):
-    # Extract questions from the provided text content
-    questions = extract_questions(read_file(file_path))
-    # Process each extracted question to build question data
-    question_data_list = [extract_question_data(question[0], question[1].strip()) for question in questions]
-    return question_data_list
+        question_infos = [create_question_info(number, text) for number, text in found_questions]
+        return question_infos
+    except Exception as error:
+        logging.error(f"Error during page analysis: {error}")
 
-def extract_question_data(number,text):
-    # Define the dictionary structure as required
-    question_data = {
-        "number": None,
-        "text": "",
-        "label": "",
+def create_question_info(question_num, question_text):
+    # logging.info(f"Analyzing number: {question_num}")
+    logging.info(f"Analyzing text: {question_text}")
+    # Updated the regex to capture variations of "There are X correct answers"
+    answer_count_regex = re.compile(
+        r'(?:There\s*(?:are|is)\s*)(\d+)(?:\s*correct\s*answers(?:\s*to\s*this\s*question)?)',
+        re.IGNORECASE
+    )
+    match_count = answer_count_regex.search(question_text)
+    
+    question_info = {
+        "number": int(question_num),
+        "text": question_text,
+        "label":"",
         "choices": [],
-        "answers": [],  
-        "valid": True, 
-        "answer_number": None,
-        "type": "radio"  # Default type
-    }
+        "question_number": None,
+        "type": "radio"  # default type
+    }  
 
-    # Regular expression pattern to capture variations of "There are X correct answers"
-    correct_answers_pattern = re.compile(r'There\s*are\s*(\d+)\s*correct\s*answers?', re.IGNORECASE)
-    
-    # Attempt to find the pattern in the provided text
-    match = correct_answers_pattern.search(text)
-    if not match:
-        question_data["valid"] = False
-        return question_data
-    
-    answer_number = int(match.group(1))
-    question_data["answer_number"] = answer_number
-    question_data["type"] = "checkbox" if answer_number > 1 else "radio"
+    if match_count:
+        correct_answers_count = int(match_count.group(1))
+        question_info["question_number"] = correct_answers_count
+        question_info["type"] = "checkbox" if correct_answers_count > 1 else "radio"
 
-    # Extract the label and choices from the text
-    # Assuming that the number of the question and the actual text of the question are also present before the pattern
-    start_of_choices = match.end()
-    question_parts = text[:start_of_choices].strip().split('.', 1) # Split only on the first dot
-    if len(question_parts) == 2:
-        question_data["number"] = int(question_parts[0])
-        question_data["text"] = question_parts[1].strip()
-        question_data["label"] = question_data["text"]
+        # Find position where label/choices separation occurs
+        separator_position = match_count.end()
+        question_label = question_text[:separator_position].strip('. ')  # Strip '.' at end if present.
+        question_choices = question_text[separator_position:].strip()
 
-    # Getting the choices list after the correct answers pattern
-    choices_text = text[start_of_choices:].strip()
-    choice_pattern = re.compile(r'\(([A-D])\)\s*([^,)]+)')
-    raw_choices = choice_pattern.findall(choices_text)
-    
-    # Populate choices and corresponding answers
-    for choice in raw_choices:
-        question_data["choices"].append({
-            "label": choice[0],
-            "text": choice[1].strip()
-        })
-        question_data["answers"].append(choice[0])
+        question_info["label"] = question_label
 
-    return question_data
+        # Extract options from the remainder of the question text after the correct answers pattern
+        option_regex = re.compile(r'\(([A-E])\)\s*(.*?)\s*(?=\([A-E]\)|$)', re.DOTALL)
+        found_options = option_regex.findall(question_choices)
+        
+        for label, text in found_options:
+            question_info["choices"].append({"label": label.strip(), "text": unescape(text).strip()})
+    else:
+        alternate_pattern = re.compile(r'Please\s*choose\s*the\s*correct\s*answer', re.IGNORECASE)
+        match_alternate = alternate_pattern.search(question_text)
 
-# Function to parse all .txt page files corresponding to the question numbers
-# Function to parse all .txt page files corresponding to the question numbers
-def parse_pages(directory):
-    json_objects = []
-    for question_num in range(1, LAST_QUESTION_PAGE + 1):
-        filename = f"page-{question_num}.txt"
-        file_path = os.path.join(directory, filename)
+        if match_alternate:
+           
+            logging.info(f"Using alternate pattern for question #{question_num}")
+            separator_position = match_alternate.end()
+            question_label = question_text[:separator_position].strip('. ')  # Strip '.' at end if present.
+            question_choices = question_text[separator_position:].strip()
 
-        if os.path.isfile(file_path):
-            page_question_data = analyze_page(file_path)  # This function will return a list of questions
-            
-            if page_question_data:
-                json_objects.extend(page_question_data)
+            question_info["label"] = question_label
+
+            option_regex = re.compile(r'\(([A-E])\)\s*(.*?)\s*(?=\([A-E]\)|$)', re.DOTALL)
+            found_options = option_regex.findall(question_choices)
+
+            for label, text in found_options:
+                question_info["choices"].append({"label": label.strip(), "text": unescape(text).strip()})
+
+            question_info["question_number"]=1
+            question_info["type"]="radio"
         else:
-            logging.warning(f"Page {filename} does not exist")
+            logging.warning(f"No correct answer or alternate pattern for question #{question_num}")
+            question_info["valid"] = False
+    return question_info
 
-    return json_objects
+   
+def process_text_files(directory):
+    questions_data = []
+    for filename in os.listdir(directory):
+        if filename.endswith(".txt"):
+            full_path = os.path.join(directory, filename)
+            logging.info(f"Processing file {filename}")
+            page_questions = analyze_text_page(full_path)
+
+            if page_questions:
+                questions_data.extend(page_questions)
+            else:
+                logging.warning(f"No question data in file {filename}")
+    if not questions_data:
+        logging.error("No question data extracted from any files.")
+
+    return questions_data
 
 def main():
-    logging.info("Parsing .txt pages and generating JSON")
+    logging.info("Starting processing of text pages to generate JSON")
     try:
-        # Ensure json directory exists
-        if not os.path.exists(json_directory):
-            os.makedirs(json_directory)
+        if not os.path.exists(json_dir):
+            os.makedirs(json_dir)
 
-        # Parse all .txt pages and generate JSON array of objects
-        json_data = parse_pages(pages_directory)
+        questionnaire_data = process_text_files(pages_dir)
+        json_output_path = os.path.join(json_dir, json_filename)
 
-        # Save the resulting JSON data into a file
-        with open(os.path.join(json_directory, JSON_FILE), 'w', encoding='utf-8') as outfile:
-            json.dump(json_data, outfile, ensure_ascii=False, indent=4)
-            logging.info("Successfully saved JSON data to file")
+        with open(json_output_path, 'w', encoding='utf-8') as json_file:
+            json.dump(questionnaire_data, json_file, ensure_ascii=False, indent=4)
+            
+        logging.info("JSON data successfully written to file")
 
-    except Exception as e:
-        logging.error(f"An error occurred during parsing: {e}")
+    except Exception as error:
+        logging.error(f"An error occurred while generating JSON: {error}")
 
 if __name__ == '__main__':
     main()
