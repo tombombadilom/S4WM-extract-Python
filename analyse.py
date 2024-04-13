@@ -86,25 +86,25 @@ def create_question_info(question_num, question_text):
         "question_number": None,
         "type": "radio"  # default type
     }  
+     # Function to extract choices
+    def extract_choices(choices_text):
+        # Regex to extract each choice from the given text
+        choice_pattern = re.compile(r'\(?([A-E])\)\s*(.*?)\s*(?=\([A-E]\)|$)', re.DOTALL)
+
+        return [{"label": label.strip(), "text": text.strip()} for label, text in choice_pattern.findall(choices_text)]
 
     if match_count:
         correct_answers_count = int(match_count.group(1))
         question_info["question_number"] = correct_answers_count
         question_info["type"] = "checkbox" if correct_answers_count > 1 else "radio"
 
-        # Find position where label/choices separation occurs
         separator_position = match_count.end()
-        question_label = question_text[:separator_position].strip('. ')  # Strip '.' at end if present.
+        question_label = question_text[:separator_position].strip('. ')
         question_choices = question_text[separator_position:].strip()
 
         question_info["label"] = question_label
+        question_info["choices"].extend(extract_choices(question_choices))
 
-        # Extract options from the remainder of the question text after the correct answers pattern
-        option_regex = re.compile(r'\(([A-E])\)\s*(.*?)\s*(?=\([A-E]\)|$)', re.DOTALL)
-        found_options = option_regex.findall(question_choices)
-        
-        for label, text in found_options:
-            question_info["choices"].append({"label": label.strip(), "text": unescape(text).strip()})
     else:
         alternate_pattern = re.compile(r'Please\s*choose\s*the\s*correct\s*answer', re.IGNORECASE)
         match_alternate = alternate_pattern.search(question_text)
@@ -113,30 +113,27 @@ def create_question_info(question_num, question_text):
            
             logging.info(f"Using alternate pattern for question #{question_num}")
             separator_position = match_alternate.end()
-            question_label = question_text[:separator_position].strip('. ')  # Strip '.' at end if present.
+            question_label = question_text[:separator_position].strip('. ')
             question_choices = question_text[separator_position:].strip()
 
             question_info["label"] = question_label
-
-            option_regex = re.compile(r'\(([A-E])\)\s*(.*?)\s*(?=\([A-E]\)|$)', re.DOTALL)
-            found_options = option_regex.findall(question_choices)
-
-            for label, text in found_options:
-                question_info["choices"].append({"label": label.strip(), "text": unescape(text).strip()})
-
-            question_info["question_number"]=1
-            question_info["type"]="radio"
+            question_info["choices"].extend(extract_choices(question_choices))
+            question_info["question_number"] = 1
+            question_info["type"] = "radio"
         else:
             logging.warning(f"No correct answer or alternate pattern for question #{question_num}")
             question_info["valid"] = False
+
     return question_info
 
    
-def process_text_files(directory):
+def process_text_files(directory, last_question_page):
     questions_data = []
-    for filename in os.listdir(directory):
-        if filename.endswith(".txt"):
-            full_path = os.path.join(directory, filename)
+    for page_number in range(1, last_question_page + 1):  # +1 to include the last page
+        filename = f"page-{page_number}.txt"  # Assuming the file naming convention is page_X.txt
+        full_path = os.path.join(directory, filename)
+        
+        if os.path.exists(full_path):
             logging.info(f"Processing file {filename}")
             page_questions = analyze_text_page(full_path)
 
@@ -144,10 +141,14 @@ def process_text_files(directory):
                 questions_data.extend(page_questions)
             else:
                 logging.warning(f"No question data in file {filename}")
+        else:
+            logging.warning(f"pAGE {filename} does not exist.")
+    
     if not questions_data:
         logging.error("No question data extracted from any files.")
 
     return questions_data
+
 
 def main():
     logging.info("Starting processing of text pages to generate JSON")
@@ -155,7 +156,7 @@ def main():
         if not os.path.exists(json_dir):
             os.makedirs(json_dir)
 
-        questionnaire_data = process_text_files(pages_dir)
+        questionnaire_data = process_text_files(pages_dir, LAST_QUESTION_PAGE)  # Pass the last question page here
         json_output_path = os.path.join(json_dir, json_filename)
 
         with open(json_output_path, 'w', encoding='utf-8') as json_file:
@@ -168,3 +169,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
