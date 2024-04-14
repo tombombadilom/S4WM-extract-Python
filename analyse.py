@@ -155,7 +155,7 @@ def create_question_info(question_num, question_text):
 		"text": question_text,
 		"label":"",
 		"choices": [],
-		"question_number": None,
+		"answer_number": None,
 		"type": "radio"  # default type
 	}  
 	 # Function to extract choices
@@ -163,7 +163,7 @@ def create_question_info(question_num, question_text):
 
 	if match_count:
 		correct_answers_count = int(match_count.group(1))
-		question_info["question_number"] = correct_answers_count
+		question_info["answer_number"] = correct_answers_count
 		question_info["type"] = "checkbox" if correct_answers_count > 1 else "radio"
 
 		separator_position = match_count.end()
@@ -172,6 +172,7 @@ def create_question_info(question_num, question_text):
 
 		question_info["label"] = question_label
 		question_info["choices"].extend(extract_choices(question_choices))
+		question_info["valid"] = True
 
 	else:
 		alternate_pattern = re.compile(r'Please\s*choose\s*the\s*correct\s*answer\.?', re.IGNORECASE)
@@ -188,8 +189,9 @@ def create_question_info(question_num, question_text):
 
 			question_info["label"] = question_label
 			question_info["choices"].extend(extract_choices(question_choices))
-			question_info["question_number"] = 1
+			question_info["answer_number"] = 1
 			question_info["type"] = "radio"
+			question_info["valid"] = True
 		elif match_third:
 			logging.info(f"Using third pattern for question #{question_num}")
 			separator_position = match_third.end()
@@ -198,8 +200,9 @@ def create_question_info(question_num, question_text):
 
 			question_info["label"] = question_label
 			question_info["choices"].extend(extract_choices(question_choices))
-			question_info["question_number"] = 99  # Assuming single answer unless specified otherwise
+			question_info["answer_number"] = 99  # Assuming single answer unless specified otherwise
 			question_info["type"] = "checkbox"
+			question_info["valid"] = True
 		else:
 			logging.warning(f"No correct answer or alternate pattern for question #{question_num}")
 			question_info["valid"] = False
