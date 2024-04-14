@@ -71,6 +71,8 @@ def analyze_text_page(page_path):
 
 def stepwise_cut_string(incoming_string, start_char, end_char):
 	# Initialize the current character as start_char
+	# lorsque tu extraie ton string entre tes deux bornes ex: A,B, et que le strig est vide , va chercher la borne B suivante et refait une extraction
+	
 	current_char = start_char
 	
 	# Initialize an empty list to hold the resulting parts
