@@ -68,48 +68,50 @@ def analyze_text_page(page_path):
 	except Exception as error:
 		logging.error(f"Error during page analysis: {error}")
 
-
 def stepwise_cut_string(incoming_string, start_char, end_char):
-	# Initialize the current character as start_char
-	# lorsque tu extraie ton string entre tes deux bornes ex: A,B, et que le strig est vide , va chercher la borne B suivante et refait une extraction
-	
-	current_char = start_char
-	
-	# Initialize an empty list to hold the resulting parts
-	parts = []
-	
-	# Start from the first character after the initial one.
-	next_char_code = ord(start_char) + 1
+		# Initialize the current character as start_char
+		current_char = start_char
 
-	# Initial part before the starting character
-	index_of_current_char = incoming_string.find(current_char)
-	if index_of_current_char != -1:
-		parts.append(incoming_string[:index_of_current_char])
-		incoming_string = incoming_string[index_of_current_char + 1:]
-	else:
-		# If the start character is not found, return the entire incoming string.
-		return [incoming_string]
-
-	# Loop until there is no string left or until we reach the end character.
-	while incoming_string and (current_char != end_char):
-		# Identify the next character in sequence
-		current_char = chr(next_char_code)
+		# Initialize an empty list to hold the resulting parts
+		parts = []
 		
-		# Search for the next occurrence of the current character in the string
-		index_of_current_char = incoming_string.find(current_char)
-		if index_of_current_char != -1:
-			# Split the string at the found character
-			parts.append(incoming_string[:index_of_current_char])
-			incoming_string = incoming_string[index_of_current_char + 1:]
-		else:
-			# Add any remaining part of the string
-			parts.append(incoming_string)
-			break  # If the end character isn't found, exit the loop
+		# Start from the first character after the initial one.
+		next_char_code = ord(start_char) + 1
 
-		# Increment the char code for the next iteration
-		next_char_code += 1
+		# Loop until there is no string left or until we reach the end character.
+		while next_char_code <= ord(end_char):
+				# Identify the next character in sequence
+				current_char = chr(next_char_code)
+				
+				# Search for the next occurrence of the current character in the string
+				index_of_current_char = incoming_string.find(current_char)
+				
+				while index_of_current_char != -1:
+						prospective_part = incoming_string[:index_of_current_char].strip()
+						
+						# Check if the part is not empty and does not start with a lowercase letter
+						if prospective_part and not prospective_part[0].islower():
+								parts.append(prospective_part)
+								break
+						
+						# Skip to the next occurrence of the current character
+						incoming_string = incoming_string[index_of_current_char + 1:]
+						index_of_current_char = incoming_string.find(current_char)
+				
+				# If the end character isn't found within the while condition, exit the loop
+				if index_of_current_char == -1:
+						parts.append(incoming_string)
+						break
+				
+				# Prepare for the next iteration to look for the subsequent character
+				incoming_string = incoming_string[index_of_current_char + 1:]
+				next_char_code += 1
+		
+		# Filter out any empty strings in the parts list just to be extra cautious
+		parts = [part for part in parts if part]
 
-	return parts
+		return parts
+
 
 def extract_choices(choices_text):
 	logging.info(f"Analyzing choices: {choices_text}")
@@ -145,71 +147,75 @@ def extract_choices(choices_text):
 
 
 def create_question_info(question_num, question_text):
-	# logging.info(f"Analyzing text: {question_text}")
-	answer_count_regex = re.compile(
-    	r'(?:There\s*(?:are|is)\s*)(\d+)(?:\s*correct\s*answers(?:\s*to\s*this\s*question)?\.)',  # Ajout d'un \. pour le point
-    	re.IGNORECASE
-	)
-	match_count = answer_count_regex.search(question_text)
-	
-	question_info = {
-		"number": int(question_num),
-		"text": question_text,
-		"label":"",
-		"choices": [],
-		"answer_number": None,
-		"type": "radio"  # default type
-	}  
-	 # Function to extract choices
-  
+		logging.info(f"Creating question info for question number {question_num}")
+		# Define regex patterns with and without the period at the end
+		answer_count_patterns = [
+				r'(?:There\s*(?:are|is)\s*)(\d+)(?:\s*correct\s*answers(?:\s*to\s*this\s*question)?\.)',
+				r'(?:There\s*(?:are|is)\s*)(\d+)(?:\s*correct\s*answers(?:\s*to\s*this\s*question)?)'
+		]
 
-	if match_count:
-		correct_answers_count = int(match_count.group(1))
-		question_info["answer_number"] = correct_answers_count
-		question_info["type"] = "checkbox" if correct_answers_count > 1 else "radio"
+		question_info = {
+				"number": int(question_num),
+				"text": question_text,
+				"label": "",
+				"choices": [],
+				"answer_number": None,
+				"type": "radio",  # default type
+				"valid": False
+		}
 
-		separator_position = match_count.end()
-		question_label = question_text[:separator_position].strip('. ')
-		question_choices = question_text[separator_position:].strip()
+		# Try patterns with the period first and then without it
+		for pattern in answer_count_patterns:
+				answer_count_regex = re.compile(pattern, re.IGNORECASE)
+				match_count = answer_count_regex.search(question_text)
+				if match_count:
+						correct_answers_count = int(match_count.group(1))
+						question_info["answer_number"] = correct_answers_count
+						question_info["type"] = "checkbox" if correct_answers_count > 1 else "radio"
 
-		question_info["label"] = question_label
-		question_info["choices"].extend(extract_choices(question_choices))
-		question_info["valid"] = True
+						separator_position = match_count.end()
+						question_label = question_text[:separator_position].rstrip('. ')
+						question_choices = question_text[separator_position:].strip()
 
-	else:
-		alternate_pattern = re.compile(r'Please\s*choose\s*the\s*correct\s*answer\.?', re.IGNORECASE)
-		third_pattern = re.compile(r'Choose\s*the\s*correct\s*answer\(s\)[:.]?', re.IGNORECASE)
-		match_alternate = alternate_pattern.search(question_text)
-		match_third = third_pattern.search(question_text)
+						question_info["label"] = question_label
+						question_info["choices"].extend(extract_choices(question_choices))
+						question_info["valid"] = True
+						break
 
-		if match_alternate:
-		   
-			logging.info(f"Using alternate pattern for question #{question_num}")
-			separator_position = match_alternate.end()
-			question_label = question_text[:separator_position].strip('. ')
-			question_choices = question_text[separator_position:].strip()
+		# If no match was found with counting pattern, try with alternate patterns
+		if not question_info["valid"]:
+				alternate_pattern = re.compile(r'Please\s*choose\s*the\s*correct\s*answer\.?', re.IGNORECASE)
+				third_pattern = re.compile(r'Choose\s*the\s*correct\s*answer\(s\)[:.]?', re.IGNORECASE)
+				match_alternate = alternate_pattern.search(question_text)
+				match_third = third_pattern.search(question_text)
 
-			question_info["label"] = question_label
-			question_info["choices"].extend(extract_choices(question_choices))
-			question_info["answer_number"] = 1
-			question_info["type"] = "radio"
-			question_info["valid"] = True
-		elif match_third:
-			logging.info(f"Using third pattern for question #{question_num}")
-			separator_position = match_third.end()
-			question_label = question_text[:separator_position].strip('. ')
-			question_choices = question_text[separator_position:].strip()
+				if match_alternate:
+						logging.info(f"Using alternate pattern for question #{question_num}")
+						separator_position = match_alternate.end()
+						question_label = question_text[:separator_position].rstrip('. ')
+						question_choices = question_text[separator_position:].strip()
 
-			question_info["label"] = question_label
-			question_info["choices"].extend(extract_choices(question_choices))
-			question_info["answer_number"] = 99  # Assuming single answer unless specified otherwise
-			question_info["type"] = "checkbox"
-			question_info["valid"] = True
-		else:
-			logging.warning(f"No correct answer or alternate pattern for question #{question_num}")
-			question_info["valid"] = False
+						question_info["label"] = question_label
+						question_info["choices"].extend(extract_choices(question_choices))
+						question_info["answer_number"] = 1
+						question_info["type"] = "radio"
+						question_info["valid"] = True
+				elif match_third:
+						logging.info(f"Using third pattern for question #{question_num}")
+						separator_position = match_third.end()
+						question_label = question_text[:separator_position].rstrip('. ')
+						question_choices = question_text[separator_position:].strip()
 
-	return question_info
+						question_info["label"] = question_label
+						question_info["choices"].extend(extract_choices(question_choices))
+						question_info["answer_number"] = 99  # Assuming single answer unless specified otherwise
+						question_info["type"] = "checkbox"
+						question_info["valid"] = True
+				else:
+						logging.warning(f"No correct answer or alternate pattern for question #{question_num}")
+
+		return question_info
+
 
    
 def process_text_files(directory, last_question_page):
