@@ -116,7 +116,6 @@ logging.basicConfig(filename=log_file_path, filemode='w', level=logging.INFO, fo
 
 # 5. identify patterns and define an array of objects as a result
 # Function to identify patterns and define an array of objects as a result
-# Function to identify patterns and define an array of objects as a result
 def identify_patterns(text):
     question_pattern = re.compile(r'\d+\.(.*?)<br />')
     option_pattern = re.compile(r'([A-Z])\s*(.*?)<br />')
